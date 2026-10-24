@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -15,7 +16,7 @@ class ProductController extends Controller
      */
     public function index()
     {
-        // Mengambil semua produk beserta relasi kategorinya dengan pagination (10 data per halaman)
+        // Get all products with their category
         $products = Product::with('category')->paginate(10);
         return ProductResource::collection($products);
     }
@@ -25,25 +26,34 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        // Validasi input data produk baru
+        // Validate the request
         $request->validate([
             'name' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:categories,category_id',
             'price' => 'required|numeric',
             'stock' => 'required|integer',
-            'img' => 'nullable|string',
+            'img' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        // Menyimpan data produk baru ke database
+        // Initialize image path
+        $path = null;
+
+        // Mengambil file image dari request img
+        if ($request->hasFile('img')) {
+            // Menyimpan file image ke storage pada folder products di disk public
+            $path = $request->file('img')->store('products', 'public');
+        }
+
+        // Create the product
         $product = Product::create([
             'name' => $request->name,
             'description' => $request->description,
             'category_id' => $request->category_id,
             'price' => $request->price,
             'stock' => $request->stock,
-            'img' => $request->img,
-            'slug' => Str::slug($request->name), // Membuat slug otomatis dari nama produk
+            'img' => $path,
+            'slug' => Str::slug($request->name), // Generate slug from name
         ]);
 
         return new ProductResource($product);
@@ -54,7 +64,7 @@ class ProductController extends Controller
      */
     public function show(string $id)
     {
-        // Mencari produk berdasarkan ID beserta kategorinya
+        // Get product by ID with its category
         $product = Product::with('category')->findOrFail($id);
         return new ProductResource($product);
     }
@@ -64,28 +74,38 @@ class ProductController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        // Find the product
         $product = Product::findOrFail($id);
 
-        // Validasi data yang akan di-update
+        // Validate the request
         $request->validate([
             'name' => 'required|string|max:150',
             'description' => 'nullable|string',
             'category_id' => 'required|exists:categories,category_id',
             'price' => 'required|numeric',
             'stock' => 'required|integer',
-            'img' => 'nullable|string',
+            'img' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        // Memperbarui data produk
-        $product->update([
+        $data = [
             'name' => $request->name,
             'description' => $request->description,
             'category_id' => $request->category_id,
             'price' => $request->price,
             'stock' => $request->stock,
-            'img' => $request->img,
-            'slug' => Str::slug($request->name),
-        ]);
+            'slug' => Str::slug($request->name), // Generate slug from name
+        ];
+
+        if ($request->hasFile('img')) {
+            // Hapus gambar lama jika ada di disk public
+            if ($product->img && Storage::disk('public')->exists($product->img)) {
+                Storage::disk('public')->delete($product->img);
+            }
+            $data['img'] = $request->file('img')->store('products', 'public');
+        }
+
+        // Update the product
+        $product->update($data);
 
         return new ProductResource($product);
     }
@@ -95,13 +115,20 @@ class ProductController extends Controller
      */
     public function destroy(string $id)
     {
+        // Find and delete the product
         $product = Product::find($id);
-        
+
         if ($product != null) {
+            // Hapus gambar jika tersimpan di disk public
+            if ($product->img && Storage::disk('public')->exists($product->img)) {
+                Storage::disk('public')->delete($product->img);
+            }
+
             $product->delete();
             return response()->json(['message' => 'Product deleted successfully']);
         }
 
+        // Return a 404 response
         return response()->json(['message' => 'Product not found'], 404);
     }
 }

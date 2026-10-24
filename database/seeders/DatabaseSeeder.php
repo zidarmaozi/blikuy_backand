@@ -15,9 +15,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        if (!User::where('email', 'test@example.com')->exists()) {
+            User::factory()->create([
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+                'password' => bcrypt('password'), // Password untuk login di Postman
+            ]);
+        }
+
         $this->call([
-        CategorySeeder::class,
-        ProductSeeder::class,
-    ]);
+            CategorySeeder::class,
+            ProductSeeder::class,
+        ]);
     }
 }

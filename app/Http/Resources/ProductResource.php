@@ -21,7 +21,7 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => (float) $this->price,
             'stock' => (int) $this->stock,
-            'img_url' => $this->img ? url('storage/' . $this->img) : null,
+            'img_url' => $this->img ? (filter_var($this->img, FILTER_VALIDATE_URL) ? $this->img : url('storage/' . $this->img)) : null,
             'category' => [
                 'id' => $this->category_id,
                 'name' => $this->category?->category,
